@@ -1,0 +1,8 @@
+backend/.idea/*
+frontend/.gitignore
+frontend/.idea/
+frontend/package-lock.json
+frontend/package.json
+frontend/public/
+frontend/tailwind.config.js
+.idea/*
