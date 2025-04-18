@@ -48,9 +48,14 @@ func NewDBHandler(connectString string) (DBHandler, error) {
 func (dbHandler DBHandler) SaveTodo(todoListId int, do domain.Todo) error {
 	var todoList domain.TodoList
 	if err := dbHandler.GormDB.First(&todoList, todoListId).Error; err != nil {
-		return fmt.Errorf("todo list with ID %d does not exist", todoListId)
+		return fmt.Errorf("todo list with ID %d does not exist: %w", todoListId, err)
 	}
 	do.TodoListID = todoListId
+	var todos []domain.Todo
+	if err := dbHandler.GormDB.Find(&todos, "todo_list_id = ?", todoListId).Error; err != nil {
+		return fmt.Errorf("failed to retrieve todos for todo list ID %d: %w", todoListId, err)
+	}
+
 	if err := dbHandler.GormDB.Save(&do).Error; err != nil {
 		return err
 	}
@@ -93,6 +98,9 @@ func (dbHandler DBHandler) LoadAllTodos() (*[]domain.Todo, error) {
 }
 
 func (dbHandler DBHandler) SaveTodoList(list domain.TodoList) error {
+	if list.Name == "" {
+		return fmt.Errorf("list name is empty")
+	}
 	if err := dbHandler.GormDB.Create(&list).Error; err != nil {
 		return fmt.Errorf("failed to insert data: %v", err)
 	}
@@ -151,12 +159,14 @@ func (dbHandler DBHandler) LoadAllTodoLists() (*[]domain.TodoList, error) {
 func Initialize(dbHandler DBHandler) error {
 	exampleData := []domain.TodoList{
 		{
+			Name: "household",
 			Todos: []domain.Todo{
 				{Name: "Buy groceries", Done: false},
 				{Name: "Write Go code", Done: true},
 			},
 		},
 		{
+			Name: "Me List",
 			Todos: []domain.Todo{
 				{Name: "Read a book", Done: false},
 				{Name: "Exercise", Done: true},
@@ -171,5 +181,54 @@ func Initialize(dbHandler DBHandler) error {
 	}
 
 	log.Println("Database initialized with example data")
+	return nil
+}
+
+func ClearAllTables(dbhandler DBHandler) error {
+	var tables []string
+
+	if err := dbhandler.GormDB.Raw("SELECT tablename FROM pg_tables WHERE schemaname = 'public'").Scan(&tables).Error; err != nil {
+		return fmt.Errorf("Fehler beim Abrufen der Tabellen: %w", err)
+	}
+
+	tx := dbhandler.GormDB.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("transaction start failed: %w", tx.Error)
+	}
+
+	for _, table := range tables {
+		query := fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table)
+		if err := tx.Exec(query).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("error clearing data from %s: %w", table, err)
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("transaction commit failed: %w", err)
+	}
+
+	log.Println("Database cleared")
+	return nil
+}
+
+func ListAllTablesAndEntries(dbhandler DBHandler) error {
+	var tables []string
+
+	if err := dbhandler.GormDB.Raw("SELECT tablename FROM pg_tables WHERE schemaname = 'public'").Scan(&tables).Error; err != nil {
+		return fmt.Errorf("Fehler beim Abrufen der Tabellen: %w", err)
+	}
+
+	for _, table := range tables {
+		var results []map[string]interface{}
+		if err := dbhandler.GormDB.Raw(fmt.Sprintf("SELECT * FROM %s", table)).Scan(&results).Error; err != nil {
+			return fmt.Errorf("Fehler beim Abrufen der Einträge aus %s: %w", table, err)
+		}
+		for _, row := range results {
+			fmt.Println(row)
+		}
+	}
+
+	log.Println("List of all tables and entries printed")
 	return nil
 }

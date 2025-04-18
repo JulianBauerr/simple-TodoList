@@ -7,7 +7,6 @@ import (
 	"Checklist/backend/src/interface/repository"
 	"Checklist/backend/src/usecases"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -32,7 +31,27 @@ func getTodoListController() controllers.TodoListController {
 
 func main() {
 	if err != nil {
-		log.Fatal("Database Error:", err)
+		fmt.Println("Error while initializing database handler")
+		fmt.Println(err)
+		return
+	}
+
+	if err = database.ClearAllTables(dbHandler); err != nil {
+		fmt.Println("Error while clearing tables")
+		fmt.Println(err)
+		return
+	}
+
+	if err = database.ListAllTablesAndEntries(dbHandler); err != nil {
+		fmt.Println("Error while clearing tables")
+		fmt.Println(err)
+		return
+	}
+
+	if err = database.Initialize(dbHandler); err != nil {
+		fmt.Println("Error while initializing tables")
+		fmt.Println(err)
+		return
 	}
 
 	httpRouter.GET("/", func(w http.ResponseWriter, r *http.Request) {
